@@ -39,14 +39,15 @@ Oxidative stress is widely implicated in the pathophysiology of depression. GBR 
 ├── scripts/                    # Python pipeline and visual execution scripts
 │   ├── download_nhanes.py      # Automated CDC NHANES raw dataset downloader
 │   ├── analysis_pipeline.py    # Main statistical pipeline (Preprocess -> MICE -> WLS -> Pooling)
-│   ├── analysis_pipeline_quick.py # Dry-run pipeline helper (low m and max_iter for testing)
 │   ├── generate_flowchart.py   # Renders participant inclusion flowchart (S1 Fig)
 │   ├── generate_forest_plot.py # Renders Table 2 / Table 3 forest plot (Figure 1)
 │   ├── generate_rcs_plot.py    # Renders Restricted Cubic Spline (RCS) curves (Figure 3)
 │   ├── generate_docx_tables.py # Compiles Markdown clinical tables into formatted Word tables
 │   ├── generate_manuscript.py  # Builds final Word manuscript with embedded tables/captions
 │   ├── generate_strobe_checklist.py # Generates cross-sectional STROBE reporting checklist
-│   └── generate_missingness_table.py # Evaluates raw missingness before imputation (S7 Table)
+│   ├── generate_missingness_table.py # Evaluates raw missingness before imputation (S7 Table)
+│   ├── generate_tp_manuscript.py  # Builds final Word manuscript for Translational Psychiatry
+│   └── generate_medrxiv_single_docx.py # Compiles unified Word manuscript for medRxiv
 └── results/                    # Output directory for plots, tables, and manuscripts (ignored in git)
 ```
 
@@ -59,7 +60,7 @@ We recommend using [uv](https://github.com/astral-sh/uv) (a fast Python package 
 ### Using `uv` (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/NHANES_GBR.git
+git clone https://github.com/mattakuya/NHANES_GBR.git
 cd NHANES_GBR
 
 # Create a virtual environment and install all dependencies
@@ -69,7 +70,7 @@ uv sync
 ### Using standard `venv` & `pip`
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/NHANES_GBR.git
+git clone https://github.com/mattakuya/NHANES_GBR.git
 cd NHANES_GBR
 
 # Create and activate virtual environment
@@ -107,7 +108,7 @@ python scripts/analysis_pipeline.py
     export NHANES_JOBS=1
     python scripts/analysis_pipeline.py
     ```
-* *For a quick test run to verify the pipeline runs without errors (using m = 1, max_iter = 1), execute `python scripts/analysis_pipeline_quick.py` instead.*
+* *For a quick test run to verify the pipeline runs without errors, you can run the main pipeline with the `NHANES_JOBS=1` sequential option.*
 
 ### Step 3: Generating Visualizations & Publication Assets
 Once the pipeline has completed and written the statistical findings to `results/`, generate all paper figures and tables:
