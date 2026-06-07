@@ -1,0 +1,18 @@
+[project]
+name = "nhanes-refined"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.4.4",
+    "pandas>=3.0.3",
+    "pyreadstat>=1.3.4",
+    "scikit-learn>=1.8.0",
+    "statsmodels>=0.14.6",
+    "python-docx>=1.2.0",
+    "joblib>=1.5.3",
+    "matplotlib>=3.10.9",
+    "scipy>=1.17.1",
+]
+

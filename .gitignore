@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# OS-generated files
+.DS_Store
+
+# Local configuration and cache
+.claude/
+.matplotlib/
+
+# Data and Results (large files and outputs should not be in git)
+data/
+results/
+submission_packages/
