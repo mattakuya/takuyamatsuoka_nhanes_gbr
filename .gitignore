@@ -20,3 +20,19 @@ wheels/
 data/
 results/
 submission_packages/
+
+# Symlinks and directories without trailing slashes
+data
+results
+submission_packages
+
+# R history and cache
+.Rhistory
+.RData
+
+# Scratch directories
+scratch/
+scratch
+
+# Word documents (manuscripts, drafts) at the root
+/*.docx
