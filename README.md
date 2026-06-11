@@ -55,8 +55,8 @@ We recommend using [uv](https://github.com/astral-sh/uv) (a fast Python package 
 ### Using `uv` (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/mattakuya/NHANES_GBR.git
-cd NHANES_GBR
+git clone https://github.com/mattakuya/takuyamatsuoka_nhanes_gbr.git
+cd takuyamatsuoka_nhanes_gbr
 
 # Create a virtual environment and install all dependencies
 uv sync
@@ -65,8 +65,8 @@ uv sync
 ### Using standard `venv` & `pip`
 ```bash
 # Clone the repository
-git clone https://github.com/mattakuya/NHANES_GBR.git
-cd NHANES_GBR
+git clone https://github.com/mattakuya/takuyamatsuoka_nhanes_gbr.git
+cd takuyamatsuoka_nhanes_gbr
 
 # Create and activate virtual environment
 python3 -m venv .venv
