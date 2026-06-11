@@ -1,6 +1,5 @@
 """
 NHANES GGT/Bil Ratio and Depressive Symptoms (PHQ-9) Association Analysis Pipeline
-(Research-Grade Version, Incorporating Review Modifications)
 
 Main Design:
 - NHANES Complex Survey Design: Cluster-robust SE using SDMVPSU
@@ -165,8 +164,8 @@ class NHANESDepressionAnalysis:
                     mem_gb = 8.0 # safe fallback
                 
                 if mem_gb >= 60.0:
-                    # High-performance workstation / server: leave 2 cores free for OS
-                    resolved_jobs = max(1, cpu_count - 2)
+                    # High-performance workstation / server: use all available cores for maximum performance
+                    resolved_jobs = cpu_count
                 else:
                     # Consumer/constrained system: cap at 4 cores to prevent memory peaks
                     resolved_jobs = max(1, min(4, cpu_count - 1))
@@ -919,32 +918,13 @@ class NHANESDepressionAnalysis:
                         include_bmi_interaction=True,
                         include_bmi_term=True,
                         exclude_covariates=None,
-                        include_vars=None):
+                        include_vars=None,
+                        rcs_knots=None,
+                        return_cov_coef=False,
+                        return_metrics=False,
+                        exclude_exposure_term=False):
         """
-        Performs MICE imputation and weighted regression M times, pooling via Rubin's Rules.
-
-        Parameters
-        ----------
-        include_sex : bool
-            If False, excludes is_female from both covariates and imputation model
-            (avoids constant column errors in sex-stratified analysis).
-        standardize_exposure : bool
-            Whether to standardize exposure by observed SD (yielding coefficients per 1 SD for comparison).
-        extract_params : list[str] | None
-            Name of coefficients to pool.
-        logistic_threshold : float | None
-            If set, outcome is binarized to PHQ-9 >= threshold and run via logistic regression.
-        extra_formula_terms : list[str] | None
-            Additional terms to insert in the formula (e.g., f"{exp_c}:is_ad").
-        include_bmi_interaction : bool
-            Whether to include the GBR * BMI interaction term in the formula.
-        include_bmi_term : bool
-            Whether to include BMI main effect in the formula (set False to avoid double-counting if exposure is OBS).
-        exclude_covariates : list[str] | None
-            Covariates to exclude from regression formula (e.g., exclude smoking/alcohol if exposure is OBS).
-            Retained as auxiliaries in the imputation model.
-        include_vars : list[str] | None
-            Additional variables to include in both imputation and regression (e.g., for joint models).
+        Performs MICE imputation and weighted regression M times, pooling via Rubin's Rules in R.
         """
         mdf, num_vars = self._prepare_imputation_df(
             df_subset, include_race, include_sex, exposure,
@@ -952,16 +932,23 @@ class NHANESDepressionAnalysis:
         exp_c = f"{exposure}_c"
 
         # Construct BMI terms (main effect / interaction)
-        if include_bmi_interaction and include_bmi_term:
-            formula_bmi = f"{exp_c} * bmi_c"
-            default_params = [exp_c, f"{exp_c}:bmi_c"]
-        elif include_bmi_term:
-            formula_bmi = f"{exp_c} + bmi_c"
-            default_params = [exp_c]
+        if exclude_exposure_term:
+            if include_bmi_term:
+                formula_bmi = "bmi_c"
+            else:
+                formula_bmi = ""
+            default_params = []
         else:
-            # Exclude BMI completely (e.g., for OBS exposure)
-            formula_bmi = f"{exp_c}"
-            default_params = [exp_c]
+            if include_bmi_interaction and include_bmi_term:
+                formula_bmi = f"{exp_c} * bmi_c"
+                default_params = [exp_c, f"{exp_c}:bmi_c"]
+            elif include_bmi_term:
+                formula_bmi = f"{exp_c} + bmi_c"
+                default_params = [exp_c]
+            else:
+                # Exclude BMI completely (e.g., for OBS exposure)
+                formula_bmi = f"{exp_c}"
+                default_params = [exp_c]
 
         if extract_params is None:
             extract_params = default_params
@@ -977,129 +964,184 @@ class NHANESDepressionAnalysis:
         exp_mean = mdf[exposure].mean(skipna=True)
         bmi_mean = mdf['BMXBMI'].mean(skipna=True)
 
-        # Exclude WTMEC2YR, exposure, BMI, and PHQ-9 items from covariates to prevent leakage.
-        # exclude_covariates handles additional exclusions (e.g., double-counting with OBS).
+        extra_terms_set = set(extra_formula_terms or [])
         covs_excl = (set(self.dpq_cols_clean)
                      | {exposure, 'BMXBMI', 'WTMEC2YR'}
-                     | exclude_covariates)
+                     | exclude_covariates
+                     | extra_terms_set)
         covs = [c for c in num_vars if c not in covs_excl]
 
+        # Define RCS variables to include in num_vars if rcs_knots is specified
+        rcs_cols = []
+        if rcs_knots is not None:
+            rcs_cols = ['rcs_lin'] + [f'rcs_nl{j+1}' for j in range(len(rcs_knots) - 2)]
+            for col in rcs_cols:
+                if col not in num_vars:
+                    num_vars.append(col)
+
         def _single_imp(seed_offset):
-            """Runs a single imputation, fits regression, and returns coefficients, variance, and convergence info."""
+            """Runs a single imputation, constructs necessary variables, and returns the imputed DataFrame."""
             imp = IterativeImputer(max_iter=self.imputer_max_iter,
                                     random_state=42 + seed_offset,
                                     sample_posterior=True)
-            idf = pd.DataFrame(imp.fit_transform(mdf[num_vars]),
-                                columns=num_vars, index=mdf.index)
-
-            # When sample_posterior=True, sklearn's early stopping is disabled,
-            # and n_iter_ typically runs up to max_iter. Avoid using it for convergence warnings.
-            n_iter_actual = getattr(imp, 'n_iter_', None)
-            reached_max = (
-                not imp.sample_posterior
-                and n_iter_actual is not None
-                and n_iter_actual >= imp.max_iter
-            )
+            # Impute excluding RCS basis variables to prevent circular features
+            impute_vars = [c for c in num_vars if c not in rcs_cols]
+            idf = pd.DataFrame(imp.fit_transform(mdf[impute_vars]),
+                                columns=impute_vars, index=mdf.index)
 
             # Restore design variables (PSU/Strata) to pre-imputed values
             for dv in self.DESIGN_VARS:
                 if dv in mdf.columns:
                     idf[dv] = mdf[dv].values
 
-            # PHQ-9: Sum items as continuous scores (no rounding, per Rubin's recommendations).
-            # Clip items since sample_posterior=True can yield values outside [0, 3].
+            # PHQ-9: Sum items as continuous scores (no rounding).
             phq_items = idf[self.dpq_cols_clean].clip(0, 3)
             idf['phq9_score'] = phq_items.sum(axis=1)
 
             idf[exp_c]   = idf[exposure] - exp_mean
             idf['bmi_c'] = idf['BMXBMI'] - bmi_mean
 
-            # Export imputed dataset for R verification (Taylor Series Linearization)
-            if label == "Full Sample (OLS PHQ-9)":
-                import os
-                out_dir = "data/imputed"
-                os.makedirs(out_dir, exist_ok=True)
-                idf.to_csv(f"{out_dir}/imputed_{seed_offset}.csv", index=False)
+            if rcs_knots is not None:
+                knots_c = rcs_knots
+                basis = self._rcs_basis(idf[exp_c].values, knots_c)
+                for j, col in enumerate(rcs_cols):
+                    idf[col] = basis[:, j]
 
-            covs_formula = ' + '.join(covs) if covs else '1'
-            extra = f" + {' + '.join(extra_formula_terms)}" if extra_formula_terms else ''
-
-            if logistic_threshold is None:
-                formula = f"phq9_score ~ {formula_bmi} + {covs_formula}{extra}"
-                model = smf.wls(formula, data=idf, weights=idf['WTMEC2YR'])
-                res = self._fit_with_cluster(model, idf)
-            else:
+            if logistic_threshold is not None:
                 idf['phq9_hi'] = (idf['phq9_score'] >= logistic_threshold).astype(int)
-                formula = f"phq9_hi ~ {formula_bmi} + {covs_formula}{extra}"
-                # statsmodels GLM cluster covariance is not fully supported with
-                # frequency weights and can yield NaN SEs. GEE gives PSU-clustered
-                # robust inference while preserving relative survey weights.
-                w_norm = idf['WTMEC2YR'] / idf['WTMEC2YR'].mean()
-                if 'SDMVPSU_c' in idf.columns and idf['SDMVPSU_c'].nunique() >= 2:
-                    model = smf.gee(formula, groups='SDMVPSU_c', data=idf,
-                                    family=sm.families.Binomial(),
-                                    weights=w_norm)
-                    res = model.fit()
-                else:
-                    model = smf.glm(formula, data=idf,
-                                     family=sm.families.Binomial(),
-                                     freq_weights=w_norm)
-                    res = model.fit()
 
-            coef_var = {}
-            for p in extract_params:
-                if p in res.params.index:
-                    coef_var[p] = (float(res.params[p]), float(res.bse[p]) ** 2)
-
-            nu = self._strata_nu(idf)
-            nu_eff = nu if nu is not None else (
-                float(res.df_resid) if np.isfinite(res.df_resid) else np.nan)
-
-            return coef_var, nu_eff, reached_max
+            return idf
 
         # Sequential or parallel execution
         if self.n_jobs != 1 and _HAS_JOBLIB:
             logging.info(f"  [{label}] Running {m} imputations in parallel (n_jobs={self.n_jobs})")
-            # Explicitly use process-based 'loky' backend to bypass the GIL and utilize multiple cores
-            results_list = Parallel(n_jobs=self.n_jobs, backend='loky')(
+            idf_list = Parallel(n_jobs=self.n_jobs, backend='loky')(
                 delayed(_single_imp)(i) for i in range(m)
             )
         else:
-            results_list = []
+            idf_list = []
             for i in range(m):
                 logging.info(f"  [{label}] Imputation {i+1}/{m}...")
-                results_list.append(_single_imp(i))
+                idf_list.append(_single_imp(i))
 
-        # Collect results
-        collected = {p: {'coefs': [], 'variances': []} for p in extract_params}
-        nu_com_list = []
-        n_max_iter_warnings = 0
+        # Run regression models via R survey package using subprocess
+        import shutil
+        import subprocess
 
-        for coef_var, nu, reached_max in results_list:
-            for p, (c, v) in coef_var.items():
-                collected[p]['coefs'].append(c)
-                collected[p]['variances'].append(v)
-            nu_com_list.append(nu)
-            if reached_max:
-                n_max_iter_warnings += 1
+        # Safe directory path inside workspace
+        temp_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data",
+            f"temp_imputed_{label.replace(' ', '_').replace('/', '_').replace('(', '_').replace(')', '_')}_{os.getpid()}"
+        )
+        os.makedirs(temp_dir, exist_ok=True)
 
-        if n_max_iter_warnings > 0:
-            logging.warning(
-                f"  [{label}] {n_max_iter_warnings}/{m} MICE runs reached "
-                f"max_iter without formal convergence (consider increasing max_iter).")
+        try:
+            # Save imputed datasets as CSVs
+            for idx, idf in enumerate(idf_list):
+                idf.to_csv(os.path.join(temp_dir, f"imputed_{idx}.csv"), index=False)
 
-        nu_com = float(np.nanmean(nu_com_list)) if nu_com_list else None
-        pooled = {}
-        for p, v in collected.items():
-            if len(v['coefs']) < m:  # Pool only coefficients that succeeded across all M imputations
-                continue
-            beta, se, pval, df_r = self._apply_rubins(
-                v['coefs'], v['variances'], m, nu_com=nu_com)
-            t_crit = stats.t.ppf(0.975, df_r) if np.isfinite(df_r) else 1.96
-            pooled[p] = {
-                'beta': beta, 'se': se, 'p': pval, 'df': df_r,
-                'ci_lo': beta - t_crit * se, 'ci_hi': beta + t_crit * se,
-            }
+            output_csv = os.path.join(temp_dir, "results.csv")
+            output_cov = os.path.join(temp_dir, "cov.csv") if return_cov_coef else "NULL"
+            output_coef = os.path.join(temp_dir, "coef.csv") if return_cov_coef else "NULL"
+            output_metrics = os.path.join(temp_dir, "metrics.csv") if return_metrics else "NULL"
+
+            # Construct formula
+            covs_formula = ' + '.join(covs) if covs else '1'
+            extra = f" + {' + '.join(extra_formula_terms)}" if extra_formula_terms else ''
+
+            if formula_bmi:
+                bmi_part = f"{formula_bmi} + "
+            else:
+                bmi_part = ""
+
+            if logistic_threshold is None:
+                formula = f"phq9_score ~ {bmi_part}{covs_formula}{extra}"
+                family = "gaussian"
+            else:
+                formula = f"phq9_hi ~ {bmi_part}{covs_formula}{extra}"
+                family = "binomial"
+
+            r_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_survey_regression.R")
+            cmd = [
+                "Rscript",
+                r_script_path,
+                temp_dir,
+                str(m),
+                formula,
+                family,
+                output_csv,
+                output_cov,
+                output_coef,
+                output_metrics
+            ]
+
+            logging.info(f"  [{label}] R formula: {formula}")
+            logging.info(f"  [{label}] Executing R survey regression (Taylor Series Linearization)...")
+            res_proc = subprocess.run(cmd, capture_output=True, text=True)
+            if res_proc.returncode != 0:
+                logging.error(f"Rscript failed with exit status {res_proc.returncode}")
+                logging.error(f"Rscript stderr:\n{res_proc.stderr}")
+                logging.error(f"Rscript stdout:\n{res_proc.stdout}")
+                res_proc.check_returncode()
+            logging.debug(res_proc.stdout)
+            if res_proc.stderr:
+                logging.debug(f"Rscript stderr:\n{res_proc.stderr}")
+
+            # Load results
+            pooled_df = pd.read_csv(output_csv)
+            pooled = {}
+            for _, row in pooled_df.iterrows():
+                term = row['term']
+                pooled[term] = {
+                    'beta': float(row['beta']),
+                    'se': float(row['se']),
+                    'ci_lo': float(row['ci_lo']),
+                    'ci_hi': float(row['ci_hi']),
+                    'p': float(row['p']),
+                    'df': np.inf
+                }
+
+            cov_mat = None
+            coef_dict = None
+            if return_cov_coef:
+                cov_df = pd.read_csv(output_cov, index_col=0)
+                cov_mat = cov_df.values
+                coef_df = pd.read_csv(output_coef)
+                coef_dict = dict(zip(coef_df['term'], coef_df['beta']))
+
+            metrics_summary = None
+            if return_metrics:
+                metrics_df = pd.read_csv(output_metrics)
+                metrics_summary = {}
+                for _, row in metrics_df.iterrows():
+                    metrics_summary[row['Metric']] = {
+                        'mean': float(row['Mean']),
+                        'sd': float(row['SD'])
+                    }
+
+        finally:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+
+        main = pooled.get(exp_c, {})
+        ret_val = {
+            'label': label,
+            'n': len(mdf),
+            'beta':  main.get('beta',  np.nan),
+            'se':    main.get('se',    np.nan),
+            'ci_lo': main.get('ci_lo', np.nan),
+            'ci_hi': main.get('ci_hi', np.nan),
+            'p':     main.get('p',     np.nan),
+            'df':    main.get('df',    np.nan),
+            'pooled': pooled,
+        }
+        if return_cov_coef:
+            ret_val['cov_mat'] = cov_mat
+            ret_val['coef_dict'] = coef_dict
+        if return_metrics:
+            ret_val['metrics'] = metrics_summary
+        return ret_val
 
         main = pooled.get(exp_c, {})
         return {
@@ -2188,85 +2230,65 @@ class NHANESDepressionAnalysis:
             })
 
     def _compare_ratio_ggt_fit_stats(self, df_subset, m):
-        """Compare fit metrics for ratio-only, GGT-only, and GGT+bilirubin models."""
-        mdf, num_vars = self._prepare_imputation_df(
-            df_subset,
-            include_race=True,
-            include_sex=True,
+        """Compare fit metrics for ratio-only, GGT-only, and GGT+bilirubin models in R."""
+        logging.info("Comparing model fit statistics (Ratio vs GGT vs Joint) in R...")
+        
+        # Scale input first to ensure comparability
+        df_scaled = df_subset.copy()
+        for col in ['log_ratio', 'log_ggt', 'log_bil']:
+            sd = float(df_scaled[col].std(skipna=True))
+            if sd and np.isfinite(sd) and sd > 0:
+                df_scaled[col] = df_scaled[col] / sd
+
+        # 1. Ratio only
+        res_ratio = self._run_mice_core(
+            df_scaled, m, "Ratio fit comparison",
             exposure='log_ratio',
-            extra_vars=['log_ggt', 'log_bil'],
+            include_bmi_interaction=False,
+            include_bmi_term=True,
+            return_metrics=True
         )
-
-        exp_means = {
-            'log_ratio': mdf['log_ratio'].mean(skipna=True),
-            'log_ggt': mdf['log_ggt'].mean(skipna=True),
-            'BMXBMI': mdf['BMXBMI'].mean(skipna=True),
-        }
-
-        covs_excl = (
-            set(self.dpq_cols_clean)
-            | {'log_ratio', 'log_ggt', 'log_bil', 'BMXBMI', 'WTMEC2YR'}
+        
+        # 2. GGT only
+        res_ggt = self._run_mice_core(
+            df_scaled, m, "GGT fit comparison",
+            exposure='log_ggt',
+            include_bmi_interaction=False,
+            include_bmi_term=True,
+            return_metrics=True
         )
-        covs = [c for c in num_vars if c not in covs_excl]
-        covs_formula = ' + '.join(covs) if covs else '1'
-
-        specs = {
-            'Ratio only': 'log_ratio_c + bmi_c',
-            'GGT only': 'log_ggt_c + bmi_c',
-            'GGT + Bil joint': 'log_ggt_c + log_bil + bmi_c',
+        
+        # 3. GGT + Bil joint
+        res_joint = self._run_mice_core(
+            df_scaled, m, "Joint fit comparison",
+            exposure='log_ggt',
+            include_bmi_interaction=False,
+            include_bmi_term=True,
+            include_vars=['log_bil'],
+            extra_formula_terms=['log_bil'],
+            return_metrics=True
+        )
+        
+        models_res = {
+            'Ratio only': res_ratio,
+            'GGT only': res_ggt,
+            'GGT + Bil joint': res_joint
         }
-        collected = {name: [] for name in specs}
-
-        for i in range(m):
-            logging.info(f"  [fit comparison] Imputation {i+1}/{m}...")
-            imp = IterativeImputer(max_iter=self.imputer_max_iter,
-                                   random_state=42 + i,
-                                   sample_posterior=True)
-            idf = pd.DataFrame(imp.fit_transform(mdf[num_vars]),
-                               columns=num_vars, index=mdf.index)
-            for dv in self.DESIGN_VARS:
-                if dv in mdf.columns:
-                    idf[dv] = mdf[dv].values
-            idf['phq9_score'] = idf[self.dpq_cols_clean].clip(0, 3).sum(axis=1)
-            idf['log_ratio_c'] = idf['log_ratio'] - exp_means['log_ratio']
-            idf['log_ggt_c'] = idf['log_ggt'] - exp_means['log_ggt']
-            idf['bmi_c'] = idf['BMXBMI'] - exp_means['BMXBMI']
-
-            for name, terms in specs.items():
-                formula = f"phq9_score ~ {terms} + {covs_formula}"
-                res = self._fit_with_cluster(
-                    smf.wls(formula, data=idf, weights=idf['WTMEC2YR']),
-                    idf,
-                )
-                resid = np.asarray(res.resid, dtype=float)
-                w = np.asarray(idf['WTMEC2YR'], dtype=float)
-                valid_w = np.isfinite(w) & (w > 0) & np.isfinite(resid)
-                wv = w[valid_w]
-                rv = resid[valid_w]
-                n_eff = int(valid_w.sum())
-                k = int(len(res.params))
-                # statsmodels WLS AIC/BIC can become inf when survey weights
-                # include zeros. Use comparable weighted Gaussian pseudo-IC.
-                rss_w = float(np.sum(wv * (rv ** 2)))
-                sigma2_w = rss_w / float(np.sum(wv)) if np.sum(wv) > 0 else np.nan
-                pseudo_aic = n_eff * np.log(sigma2_w) + 2 * k
-                pseudo_bic = n_eff * np.log(sigma2_w) + k * np.log(n_eff)
-                rmse_w = float(np.sqrt(np.average(resid ** 2, weights=w)))
-                collected[name].append({
-                    'Pseudo_AIC': float(pseudo_aic),
-                    'Pseudo_BIC': float(pseudo_bic),
-                    'Adj_R2': float(getattr(res, 'rsquared_adj', np.nan)),
-                    'Weighted_RMSE': rmse_w,
-                })
-
+        
         rows = []
-        for name, vals in collected.items():
-            df_vals = pd.DataFrame(vals)
-            row = {'Model': name, 'N': len(mdf), 'M': m}
+        for name, res in models_res.items():
+            metrics = res['metrics']
+            row = {
+                'Model': name,
+                'N': res['n'],
+                'M': m
+            }
             for metric in ['Pseudo_AIC', 'Pseudo_BIC', 'Adj_R2', 'Weighted_RMSE']:
-                row[f'{metric}_mean'] = df_vals[metric].mean()
-                row[f'{metric}_sd'] = df_vals[metric].std(ddof=1) if m > 1 else np.nan
+                row[f'{metric}_mean'] = metrics[metric]['mean']
+                row[f'{metric}_sd'] = metrics[metric]['sd']
             rows.append(row)
+            
+        return rows
         return rows
 
     # =====================================================
@@ -2891,15 +2913,15 @@ class NHANESDepressionAnalysis:
     # =====================================================
     def run_rcs_analysis(self, m=5, n_knots=4, output_dir='results'):
         """
-        Fits restricted cubic splines to test for non-linearity in the GBR-PHQ-9 link,
+        Fits restricted cubic splines to test for non-linearity in the GBR-PHQ-9 link in R,
         saving the dose-response curve as a PNG.
 
         - Knots: Set at observed percentiles (4 knots at Harrell's recommended 5/35/65/95%).
-        - Uses identical knots across all imputations to construct stable RCS bases.
-        - Wald test for non-linearity: Pools non-linear contrasts via Rubin's D1 method -> chi2(k-2).
-        - Plots the dose-response curve with Rubin-pooled predictions and 95% CIs.
+        - Uses R survey regression for correct Taylor Series Linearization.
+        - Wald test for non-linearity: Pools non-linear contrasts from R and tests them.
+        - Plots the dose-response curve with R-pooled predictions and 95% CIs.
         """
-        logging.info(f"Starting RCS analysis (M={m}, n_knots={n_knots})...")
+        logging.info(f"Starting RCS analysis in R (M={m}, n_knots={n_knots})...")
 
         pct_map = {3: [10, 50, 90], 4: [5, 35, 65, 95], 5: [5, 27.5, 50, 72.5, 95]}
         pcts = pct_map.get(n_knots, pct_map[4])
@@ -2907,100 +2929,77 @@ class NHANESDepressionAnalysis:
         knots = np.percentile(obs_lr, pcts)
         logging.info(f"  Knots at {pcts} pcts: {knots.round(3)}")
 
-        mdf, num_vars = self._prepare_imputation_df(
-            self.df, include_race=True, include_sex=True, exposure='log_ratio')
+        # Center knots based on common mdf exp_mean to align with _run_mice_core
+        mdf, _ = self._prepare_imputation_df(self.df, include_race=True, include_sex=True, exposure='log_ratio')
         exp_mean = mdf['log_ratio'].mean(skipna=True)
-        bmi_mean = mdf['BMXBMI'].mean(skipna=True)
         knots_c = knots - exp_mean
-
-        covs_excl = set(self.dpq_cols_clean) | {'log_ratio', 'BMXBMI', 'WTMEC2YR'}
-        covs = [c for c in num_vars if c not in covs_excl]
-        covs_formula = ' + '.join(covs) if covs else '1'
 
         rcs_cols = ['rcs_lin'] + [f'rcs_nl{j+1}' for j in range(n_knots - 2)]
         nonlinear_cols = rcs_cols[1:]
         n_nl = len(nonlinear_cols)
 
+        # Call R via _run_mice_core to do MICE + svyglm + MIcombine
+        res = self._run_mice_core(
+            self.df, m, "RCS Analysis",
+            exposure='log_ratio',
+            include_bmi_interaction=False,
+            include_bmi_term=True,
+            include_vars=rcs_cols,
+            extra_formula_terms=rcs_cols,
+            rcs_knots=knots_c,
+            return_cov_coef=True,
+            extract_params=rcs_cols + ['Intercept'],
+            exclude_exposure_term=True
+        )
+
+        cov_mat = res['cov_mat']
+        coef_dict = res['coef_dict']
+
+        # Construct grid for prediction plotting
         lr_grid = np.linspace(float(obs_lr.quantile(0.025)),
                               float(obs_lr.quantile(0.975)), 100)
         lr_grid_c = lr_grid - exp_mean
         grid_basis = self._rcs_basis(lr_grid_c, knots_c)
 
-        pred_list, pred_var_list, nl_coef_list, nl_cov_list = [], [], [], []
+        # Compute predictions using pooled coefficients (covariates at their means)
+        pooled_pred = np.full(100, float(coef_dict.get('(Intercept)', 0.0)))
+        for j, col in enumerate(rcs_cols):
+            coef_val = float(coef_dict.get(col, 0.0))
+            pooled_pred += coef_val * grid_basis[:, j]
 
-        for seed_i in range(m):
-            logging.info(f"  [{seed_i+1}/{m}] imputation...")
-            imp = IterativeImputer(max_iter=self.imputer_max_iter,
-                                   random_state=42 + seed_i,
-                                   sample_posterior=True)
-            idf = pd.DataFrame(imp.fit_transform(mdf[num_vars]),
-                               columns=num_vars, index=mdf.index)
-            for dv in self.DESIGN_VARS:
-                if dv in mdf.columns:
-                    idf[dv] = mdf[dv].values
-            idf['phq9_score']  = idf[self.dpq_cols_clean].clip(0, 3).sum(axis=1)
-            idf['log_ratio_c'] = idf['log_ratio'] - exp_mean
-            idf['bmi_c']       = idf['BMXBMI'] - bmi_mean
+        # Compute prediction variance using pooled covariance matrix
+        X_rcs = np.column_stack([np.ones(100), grid_basis])
+        ic_rcs = ['(Intercept)'] + rcs_cols
+        
+        # Map variables to row/col indices in cov_mat (which matches the coefficient order)
+        term_order = list(coef_dict.keys())
+        indices = [term_order.index(t) for t in ic_rcs if t in term_order]
+        
+        if len(indices) == len(ic_rcs):
+            Sig_sub = cov_mat[np.ix_(indices, indices)]
+            pooled_var = np.diag(X_rcs @ Sig_sub @ X_rcs.T)
+            pooled_se = np.sqrt(np.maximum(pooled_var, 0))
+        else:
+            logging.warning("RCS cov mapping failed, prediction SEs will be NaN")
+            pooled_se = np.full(100, np.nan)
 
-            basis = self._rcs_basis(idf['log_ratio_c'].values, knots_c)
-            for j, col in enumerate(rcs_cols):
-                idf[col] = basis[:, j]
-
-            formula = (f"phq9_score ~ {' + '.join(rcs_cols)}"
-                       f" + bmi_c + {covs_formula}")
-            res = self._fit_with_cluster(
-                smf.wls(formula, data=idf, weights=idf['WTMEC2YR']), idf)
-
-            # Coefficients and covariance of non-linear terms
-            nl_idx = [res.params.index.get_loc(c)
-                      for c in nonlinear_cols if c in res.params.index]
-            if len(nl_idx) == n_nl:
-                nl_coef_list.append(res.params.values[nl_idx])
-                nl_cov_list.append(
-                    res.cov_params().values[np.ix_(nl_idx, nl_idx)])
-
-            # Predictions (grid, with covariates fixed at their means)
-            pred = np.full(100, float(res.params.get('Intercept', 0.0)))
-            for j, col in enumerate(rcs_cols):
-                if col in res.params:
-                    pred += res.params[col] * grid_basis[:, j]
-            for cov in covs:
-                if cov in res.params and cov in idf.columns:
-                    pred += float(res.params[cov]) * float(idf[cov].mean())
-
-            # Prediction variance (approximation of intercept + RCS terms)
-            ic_rcs = ['Intercept'] + rcs_cols
-            ic_idx = [i for i, p in enumerate(res.params.index) if p in ic_rcs]
-            X_rcs = np.column_stack([np.ones(100), grid_basis])
-            Sig = res.cov_params().values
-            if X_rcs.shape[1] == len(ic_idx):
-                pvar = np.diag(X_rcs @ Sig[np.ix_(ic_idx, ic_idx)] @ X_rcs.T)
-            else:
-                pvar = np.full(100, np.nan)
-
-            pred_list.append(pred)
-            pred_var_list.append(pvar)
-
-        # Rubin pooling (predictions)
-        preds = np.array(pred_list)
-        pvars = np.array(pred_var_list)
-        pooled_pred = preds.mean(axis=0)
-        total_var = np.nanmean(pvars, axis=0) + (1 + 1/m) * preds.var(axis=0, ddof=1)
-        pooled_se = np.sqrt(np.maximum(total_var, 0))
-
-        # Wald test for non-linearity (D1 method)
+        # Wald test for non-linearity
+        nl_indices = [term_order.index(t) for t in nonlinear_cols if t in term_order]
         wald, p_nl = np.nan, np.nan
-        if len(nl_coef_list) == m:
-            nl_arr = np.array(nl_coef_list)
-            beta_nl = nl_arr.mean(axis=0)
-            U_nl = np.nanmean(nl_cov_list, axis=0)
-            B_nl = np.cov(nl_arr.T, ddof=1) if m > 1 else np.zeros((n_nl, n_nl))
-            T_nl = U_nl + (1 + 1/m) * B_nl
+        if len(nl_indices) == n_nl:
+            beta_nl = np.array([coef_dict[t] for t in nonlinear_cols])
+            Sig_nl = cov_mat[np.ix_(nl_indices, nl_indices)]
             try:
-                wald = float(beta_nl @ np.linalg.solve(T_nl, beta_nl))
+                inv_Sig_nl = np.linalg.inv(Sig_nl)
+                wald = float(beta_nl.T @ inv_Sig_nl @ beta_nl)
                 p_nl = float(stats.chi2.sf(wald, df=n_nl))
             except np.linalg.LinAlgError:
-                pass
+                try:
+                    inv_Sig_nl = np.linalg.pinv(Sig_nl)
+                    wald = float(beta_nl.T @ inv_Sig_nl @ beta_nl)
+                    p_nl = float(stats.chi2.sf(wald, df=n_nl))
+                except Exception:
+                    pass
 
         p_str = f'{p_nl:.3f}' if np.isfinite(p_nl) else 'N/A'
         print(f"\n### RCS NON-LINEARITY TEST (log_ratio → PHQ-9) ###")
@@ -3017,12 +3016,10 @@ class NHANESDepressionAnalysis:
 
             ci_lo = pooled_pred - 1.96 * pooled_se
             ci_hi = pooled_pred + 1.96 * pooled_se
-            # Use Helvetica with standard fallbacks (Unified Design System)
             plt.rcParams['font.sans-serif'] = ['Helvetica', 'Arial', 'DejaVu Sans', 'sans-serif']
             plt.rcParams['font.family'] = 'sans-serif'
             plt.rcParams['font.size'] = 10
             
-            # Color constants (Unified Design System)
             primary_navy = '#263746'
             slate_blue = '#2f6f9f'
             muted_gray = '#6b7280'
@@ -3030,33 +3027,27 @@ class NHANESDepressionAnalysis:
 
             fig, ax = plt.subplots(figsize=(6.5, 4.2))
             
-            # Use Primary Navy for prediction curve and Slate Blue for shaded region
             ax.plot(lr_grid, pooled_pred, color=primary_navy, lw=2.0,
                     label='Predicted PHQ-9 score')
             ax.fill_between(lr_grid, ci_lo, ci_hi,
                             color=slate_blue, alpha=0.18, label='95% Confidence Interval')
             
-            # Subtle rug plot for sample density using Muted Gray
             samp = obs_lr.sample(min(800, len(obs_lr)), random_state=42)
             ax.plot(samp, np.full(len(samp), float(ci_lo.min()) - 0.1),
                     '|', color=muted_gray, alpha=0.2, ms=4, label='Participant density')
             
-            # Dashed vertical lines for knots using Muted Gray
             for idx, kv in enumerate(knots):
                 label_k = 'Knot positions' if idx == 0 else ''
                 ax.axvline(kv, ls='--', lw=1.0, color=muted_gray, alpha=0.7, label=label_k)
                 
-            # Clean and modern axes styling
             ax.set_xlabel('log(GGT-to-Total Bilirubin ratio)', fontsize=9.5, color=primary_navy, labelpad=8, fontweight='bold')
             ax.set_ylabel('PHQ-9 score (covariate-adjusted)', fontsize=9.5, color=primary_navy, labelpad=8, fontweight='bold')
             
-            # Keep the figure itself compact; the full non-linearity test is reported in the caption.
             ax.set_title(
                 'Dose-response relationship between log(GBR) and PHQ-9',
                 fontsize=10.5, weight='bold', pad=12, loc='left', color=primary_navy
             )
             
-            # Style legend, tick marks, and spines
             ax.legend(frameon=False, loc='upper left', fontsize=8.5, labelcolor=primary_navy)
             ax.tick_params(colors=primary_navy)
             ax.spines['top'].set_visible(False)
@@ -3287,9 +3278,8 @@ if __name__ == "__main__":
         dataset_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "raw")
         
-        # Instantiate pipeline; n_jobs=None resolves dynamically based on system memory and core counts
         pipeline = NHANESDepressionAnalysis(
-            dataset_dir=dataset_path, n_jobs=None, imputer_max_iter=30)
+            dataset_dir=dataset_path, n_jobs=None, imputer_max_iter=15)
         run_full_pipeline(pipeline, m=20)
     except Exception as e:
         logging.error(f"Analysis failed: {e}", exc_info=True)

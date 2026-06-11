@@ -11,6 +11,11 @@ def main():
         plt.rcParams['font.sans-serif'] = ['Helvetica', 'Arial', 'DejaVu Sans', 'sans-serif']
         plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.size'] = 10
+        plt.rcParams['axes.unicode_minus'] = False
+        plt.rcParams['mathtext.fontset'] = 'custom'
+        plt.rcParams['mathtext.rm'] = 'Helvetica'
+        plt.rcParams['mathtext.it'] = 'Helvetica:italic'
+        plt.rcParams['mathtext.bf'] = 'Helvetica:bold'
         
         # Color constants (Unified Design System)
         primary_navy = '#263746'
@@ -23,12 +28,12 @@ def main():
         # 5th to 95th percentile is roughly -1.8 to +1.8
         x = np.linspace(-1.8, 1.8, 100)
         
-        # Model coefficients from multi-imputation results (Table 2 / Interaction Analysis)
-        # Main effect of log(GBR)_c: 0.189 (SE = 0.043, p = 1.40e-5)
-        # Interaction log(GBR)_c * is_ad: 0.480 (SE = 0.141, p = 6.93e-4)
+        # Model coefficients from R survey AD-interaction analysis (m=20)
+        # Main effect of log(GBR)_c (non-AD baseline): 0.1882 (SE = 0.0417, p = 6.61e-6)
+        # Interaction log(GBR)_c * is_ad (AD user excess): 0.4849 (SE = 0.1430, p = 7.02e-4)
         # Baseline difference (antidepressant users have higher baseline PHQ-9 by ~2.8 points on average)
-        beta_gbr = 0.189
-        beta_interaction = 0.480
+        beta_gbr = 0.1882
+        beta_interaction = 0.4849
         baseline_non_users = 2.15
         baseline_users = 4.95
         
@@ -37,9 +42,9 @@ def main():
         y_users = baseline_users + (beta_gbr + beta_interaction) * x
         
         # 95% Confidence bands (approximate based on standard errors for marginal effects)
-        # SE for non-users slope: 0.043, SE for users slope: ~0.147
-        se_non_users = 0.043
-        se_users = 0.147
+        # SE for non-users slope: 0.0417, SE for users slope: sqrt(0.0417^2 + 0.1430^2) ≈ 0.149
+        se_non_users = 0.0417
+        se_users = 0.149
         
         ci_non_users_lo = y_non_users - 1.96 * se_non_users * np.abs(x)
         ci_non_users_hi = y_non_users + 1.96 * se_non_users * np.abs(x)
@@ -72,12 +77,12 @@ def main():
         ax.yaxis.grid(True, linestyle=':', color=grid_color, linewidth=0.8, zorder=0)
         ax.tick_params(colors=primary_navy)
         
-        # Annotate Interaction Statistics inside the plot area
+        # Annotate Interaction Statistics inside the plot area using math text in Helvetica
         stat_box = (
-            r"$\mathbf{Interaction\ Effect:}$" "\n"
-            r"$\beta_{interaction} = 0.480$" "\n"
-            r"$95\%\text{ CI: } [0.203, 0.757]$" "\n"
-            r"$P_{\mathit{interaction}} = 6.93 \times 10^{-4}$"
+            "Interaction Effect:\n"
+            r"$\beta = 0.485$" "\n"
+            r"$95\%\ \mathrm{CI}:\ [0.205,\ 0.765]$" "\n"
+            r"$p = 7.02 \times 10^{-4}$"
         )
         ax.text(
             -1.6, 5.8, stat_box, 

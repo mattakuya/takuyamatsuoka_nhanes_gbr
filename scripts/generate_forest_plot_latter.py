@@ -27,19 +27,19 @@ def format_p_value(p_str):
 
 def fallback_items():
     return [
-        {'label': 'Overall (Full Sample)', 'is_header': False, 'is_primary': True, 'n': '36580', 'beta': 0.2564, 'ci_lo': 0.1713, 'ci_hi': 0.3414, 'p_val': '< 0.001'},
+        {'label': 'Overall (Full Sample)', 'is_header': False, 'is_primary': True, 'n': '36580', 'beta': 0.2561, 'ci_lo': 0.1683, 'ci_hi': 0.3438, 'p_val': '< 0.001'},
         {'label': 'Alcohol Consumption (NIAAA)', 'is_header': True, 'is_primary': False},
-        {'label': '  Non-drinker', 'is_header': False, 'is_primary': False, 'n': '7557', 'beta': 0.1231, 'ci_lo': -0.0372, 'ci_hi': 0.2834, 'p_val': '0.130'},
-        {'label': '  Low-risk drinker', 'is_header': False, 'is_primary': False, 'n': '18666', 'beta': 0.2273, 'ci_lo': 0.1200, 'ci_hi': 0.3347, 'p_val': '< 0.001'},
-        {'label': '  Heavy drinker', 'is_header': False, 'is_primary': False, 'n': '2077', 'beta': 0.5407, 'ci_lo': 0.2076, 'ci_hi': 0.8738, 'p_val': '0.002'},
+        {'label': '  Non-drinker', 'is_header': False, 'is_primary': False, 'n': '7557', 'beta': 0.1289, 'ci_lo': -0.0298, 'ci_hi': 0.2877, 'p_val': '0.112'},
+        {'label': '  Low-risk drinker', 'is_header': False, 'is_primary': False, 'n': '18666', 'beta': 0.2287, 'ci_lo': 0.1224, 'ci_hi': 0.3350, 'p_val': '< 0.001'},
+        {'label': '  Heavy drinker', 'is_header': False, 'is_primary': False, 'n': '2077', 'beta': 0.5344, 'ci_lo': 0.2194, 'ci_hi': 0.8494, 'p_val': '< 0.001'},
         {'label': 'Cotinine Level (Smoking Exposure)', 'is_header': True, 'is_primary': False},
-        {'label': '  Cotinine < 3 ng/mL (Non-exposed)', 'is_header': False, 'is_primary': False, 'n': '24283', 'beta': 0.1861, 'ci_lo': 0.0937, 'ci_hi': 0.2784, 'p_val': '< 0.001'},
-        {'label': '  Cotinine 3-30 ng/mL (Transitional)', 'is_header': False, 'is_primary': False, 'n': '1386', 'beta': 0.4568, 'ci_lo': 0.0627, 'ci_hi': 0.8509, 'p_val': '0.024'},
-        {'label': '  Cotinine > 30 ng/mL (Active smoker)', 'is_header': False, 'is_primary': False, 'n': '7359', 'beta': 0.3144, 'ci_lo': 0.1165, 'ci_hi': 0.5123, 'p_val': '0.002'},
+        {'label': '  Cotinine < 3 ng/mL (Non-exposed)', 'is_header': False, 'is_primary': False, 'n': '24283', 'beta': 0.1884, 'ci_lo': 0.0969, 'ci_hi': 0.2799, 'p_val': '< 0.001'},
+        {'label': '  Cotinine 3-30 ng/mL (Transitional)', 'is_header': False, 'is_primary': False, 'n': '1386', 'beta': 0.4547, 'ci_lo': 0.0740, 'ci_hi': 0.8354, 'p_val': '0.019'},
+        {'label': '  Cotinine > 30 ng/mL (Active smoker)', 'is_header': False, 'is_primary': False, 'n': '7359', 'beta': 0.3104, 'ci_lo': 0.1056, 'ci_hi': 0.5151, 'p_val': '0.003'},
         {'label': 'Systemic Inflammation (hs-CRP, I/J only)', 'is_header': True, 'is_primary': False},
-        {'label': '  hsCRP < 1 mg/L', 'is_header': False, 'is_primary': False, 'n': '3179', 'beta': 0.2114, 'ci_lo': -0.0485, 'ci_hi': 0.4712, 'p_val': '0.107'},
-        {'label': '  hsCRP 1-3 mg/L', 'is_header': False, 'is_primary': False, 'n': '3507', 'beta': 0.1773, 'ci_lo': -0.0669, 'ci_hi': 0.4215, 'p_val': '0.148'},
-        {'label': '  hsCRP > 3 mg/L', 'is_header': False, 'is_primary': False, 'n': '3830', 'beta': 0.1325, 'ci_lo': -0.1230, 'ci_hi': 0.3880, 'p_val': '0.297'},
+        {'label': '  hsCRP < 1 mg/L', 'is_header': False, 'is_primary': False, 'n': '3179', 'beta': 0.1999, 'ci_lo': -0.0424, 'ci_hi': 0.4422, 'p_val': '0.106'},
+        {'label': '  hsCRP 1-3 mg/L', 'is_header': False, 'is_primary': False, 'n': '3507', 'beta': 0.1824, 'ci_lo': -0.0384, 'ci_hi': 0.4031, 'p_val': '0.105'},
+        {'label': '  hsCRP > 3 mg/L', 'is_header': False, 'is_primary': False, 'n': '3830', 'beta': 0.1398, 'ci_lo': -0.1288, 'ci_hi': 0.4085, 'p_val': '0.308'},
     ]
 
 def main():

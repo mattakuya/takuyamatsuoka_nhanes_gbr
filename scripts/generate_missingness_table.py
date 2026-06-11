@@ -192,13 +192,11 @@ def build_docx(df: pd.DataFrame, path: Path) -> None:
 def main() -> None:
     df = build_missingness_dataframe()
     md = dataframe_to_markdown(df)
-    for path in [OUT_MD, PACKAGE_MD, TP_PACKAGE_MD]:
+    for path in [PACKAGE_MD, TP_PACKAGE_MD]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(md, encoding="utf-8")
-    for path in [OUT_DOCX, PACKAGE_DOCX, TP_PACKAGE_DOCX]:
+    for path in [PACKAGE_DOCX, TP_PACKAGE_DOCX]:
         build_docx(df, path)
-    print(f"Saved {OUT_MD}")
-    print(f"Saved {OUT_DOCX}")
     print(f"Saved {PACKAGE_MD}")
     print(f"Saved {PACKAGE_DOCX}")
     print(f"Saved {TP_PACKAGE_MD}")

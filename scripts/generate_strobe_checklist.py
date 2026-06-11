@@ -88,6 +88,12 @@ def set_repeat_table_header(row) -> None:
     tr_pr.append(tbl_header)
 
 
+def prevent_row_split(row) -> None:
+    tr_pr = row._tr.get_or_add_trPr()
+    cant_split = OxmlElement("w:cantSplit")
+    tr_pr.append(cant_split)
+
+
 def format_run(run, *, size=9, bold=False, color="000000") -> None:
     run.font.name = "Calibri"
     run._element.rPr.rFonts.set(qn("w:eastAsia"), "Calibri")
@@ -153,9 +159,12 @@ def build_docx(path: Path) -> None:
         cell.text = ""
         add_paragraph(cell, header, bold=True, size=8.5)
     set_repeat_table_header(table.rows[0])
+    prevent_row_split(table.rows[0])
 
     for section_topic, item, recommendation, location, response in CHECKLIST_ROWS:
-        cells = table.add_row().cells
+        row = table.add_row()
+        prevent_row_split(row)
+        cells = row.cells
         values = [section_topic, item, recommendation, location, response]
         for cell, value, width in zip(cells, values, widths):
             set_cell_width(cell, width)

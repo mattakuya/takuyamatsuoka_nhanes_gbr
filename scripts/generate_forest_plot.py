@@ -28,23 +28,23 @@ def format_p_value(p_str):
 
 def fallback_items():
     return [
-        {'label': 'Overall (Full Sample)', 'is_header': False, 'is_primary': True, 'n': '36580', 'beta': 0.2564, 'ci_lo': 0.1713, 'ci_hi': 0.3414, 'p_val': '< 0.001'},
+        {'label': 'Overall (Full Sample)', 'is_header': False, 'is_primary': True, 'n': '36580', 'beta': 0.2561, 'ci_lo': 0.1683, 'ci_hi': 0.3438, 'p_val': '< 0.001'},
         {'label': 'BMI Categories (kg/m²)', 'is_header': True, 'is_primary': False},
-        {'label': '  Normal (18.5-24.9)', 'is_header': False, 'is_primary': False, 'n': '9783', 'beta': 0.3013, 'ci_lo': 0.1541, 'ci_hi': 0.4484, 'p_val': '< 0.001'},
-        {'label': '  Overweight (25.0-29.9)', 'is_header': False, 'is_primary': False, 'n': '11205', 'beta': 0.3278, 'ci_lo': 0.1961, 'ci_hi': 0.4594, 'p_val': '< 0.001'},
-        {'label': '  Obese (≥ 30.0)', 'is_header': False, 'is_primary': False, 'n': '13007', 'beta': 0.1623, 'ci_lo': 0.0325, 'ci_hi': 0.2921, 'p_val': '0.015'},
+        {'label': '  Normal (18.5-24.9)', 'is_header': False, 'is_primary': False, 'n': '9783', 'beta': 0.2924, 'ci_lo': 0.1538, 'ci_hi': 0.4310, 'p_val': '< 0.001'},
+        {'label': '  Overweight (25.0-29.9)', 'is_header': False, 'is_primary': False, 'n': '11205', 'beta': 0.3261, 'ci_lo': 0.1983, 'ci_hi': 0.4540, 'p_val': '< 0.001'},
+        {'label': '  Obese (≥ 30.0)', 'is_header': False, 'is_primary': False, 'n': '13007', 'beta': 0.1752, 'ci_lo': 0.0315, 'ci_hi': 0.3190, 'p_val': '0.017'},
         {'label': 'Sex', 'is_header': True, 'is_primary': False},
-        {'label': '  Male', 'is_header': False, 'is_primary': False, 'n': '17783', 'beta': 0.2578, 'ci_lo': 0.1550, 'ci_hi': 0.3606, 'p_val': '< 0.001'},
-        {'label': '  Female', 'is_header': False, 'is_primary': False, 'n': '18797', 'beta': 0.2667, 'ci_lo': 0.1514, 'ci_hi': 0.3820, 'p_val': '< 0.001'},
+        {'label': '  Male', 'is_header': False, 'is_primary': False, 'n': '17783', 'beta': 0.2634, 'ci_lo': 0.1610, 'ci_hi': 0.3657, 'p_val': '< 0.001'},
+        {'label': '  Female', 'is_header': False, 'is_primary': False, 'n': '18797', 'beta': 0.2594, 'ci_lo': 0.1388, 'ci_hi': 0.3801, 'p_val': '< 0.001'},
         {'label': 'Age Groups', 'is_header': True, 'is_primary': False},
-        {'label': '  Age 18-39', 'is_header': False, 'is_primary': False, 'n': '13354', 'beta': 0.2066, 'ci_lo': 0.0896, 'ci_hi': 0.3235, 'p_val': '< 0.001'},
-        {'label': '  Age 40-64', 'is_header': False, 'is_primary': False, 'n': '14713', 'beta': 0.2670, 'ci_lo': 0.1346, 'ci_hi': 0.3993, 'p_val': '< 0.001'},
-        {'label': '  Age 65+', 'is_header': False, 'is_primary': False, 'n': '8513', 'beta': 0.1832, 'ci_lo': 0.0260, 'ci_hi': 0.3404, 'p_val': '0.023'},
+        {'label': '  Age 18-39', 'is_header': False, 'is_primary': False, 'n': '13354', 'beta': 0.2045, 'ci_lo': 0.0884, 'ci_hi': 0.3207, 'p_val': '< 0.001'},
+        {'label': '  Age 40-64', 'is_header': False, 'is_primary': False, 'n': '14713', 'beta': 0.2638, 'ci_lo': 0.1190, 'ci_hi': 0.4086, 'p_val': '< 0.001'},
+        {'label': '  Age 65+', 'is_header': False, 'is_primary': False, 'n': '8513', 'beta': 0.1795, 'ci_lo': 0.0134, 'ci_hi': 0.3456, 'p_val': '0.034'},
         {'label': 'Race / Ethnicity', 'is_header': True, 'is_primary': False},
-        {'label': '  Non-Hispanic White', 'is_header': False, 'is_primary': False, 'n': '14561', 'beta': 0.3520, 'ci_lo': 0.2273, 'ci_hi': 0.4766, 'p_val': '< 0.001'},
-        {'label': '  Non-Hispanic Black', 'is_header': False, 'is_primary': False, 'n': '7912', 'beta': 0.2782, 'ci_lo': 0.1181, 'ci_hi': 0.4383, 'p_val': '< 0.001'},
-        {'label': '  Hispanic (combined)', 'is_header': False, 'is_primary': False, 'n': '9487', 'beta': -0.0243, 'ci_lo': -0.1753, 'ci_hi': 0.1266, 'p_val': '0.749'},
-        {'label': '  Non-Hispanic Asian', 'is_header': False, 'is_primary': False, 'n': '3108', 'beta': 0.0580, 'ci_lo': -0.1014, 'ci_hi': 0.2174, 'p_val': '0.469'},
+        {'label': '  Non-Hispanic White', 'is_header': False, 'is_primary': False, 'n': '14561', 'beta': 0.3554, 'ci_lo': 0.2200, 'ci_hi': 0.4908, 'p_val': '< 0.001'},
+        {'label': '  Non-Hispanic Black', 'is_header': False, 'is_primary': False, 'n': '7912', 'beta': 0.2734, 'ci_lo': 0.1293, 'ci_hi': 0.4175, 'p_val': '< 0.001'},
+        {'label': '  Hispanic (combined)', 'is_header': False, 'is_primary': False, 'n': '9487', 'beta': -0.0349, 'ci_lo': -0.1817, 'ci_hi': 0.1119, 'p_val': '0.641'},
+        {'label': '  Non-Hispanic Asian', 'is_header': False, 'is_primary': False, 'n': '3108', 'beta': 0.0608, 'ci_lo': -0.0975, 'ci_hi': 0.2190, 'p_val': '0.452'},
     ]
 
 def main():

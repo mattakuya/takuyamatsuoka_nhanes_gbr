@@ -11,6 +11,8 @@ from docx.shared import Inches, Pt
 from generate_tp_manuscript import (
     build_table_1,
     build_table_2,
+    build_table_3,
+    build_table_4,
     build_supp_table_1,
     build_supp_table_2,
     build_supp_table_3,
@@ -25,8 +27,8 @@ from generate_tp_manuscript import (
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
-OUT = RESULTS / "medrxiv_single_manuscript.docx"
-OUT_PRINT = RESULTS / "medrxiv_single_manuscript_print_reading.docx"
+OUT = ROOT / "submission_packages" / "medrxiv" / "medrxiv_single_manuscript.docx"
+OUT_PRINT = ROOT / "submission_packages" / "medrxiv" / "medrxiv_single_manuscript_print_reading.docx"
 GITHUB_URL = "https://github.com/mattakuya/NHANES_GBR"
 
 MAJOR_HEADINGS = {
@@ -145,7 +147,7 @@ def markdown_table_rows(md_table: str):
     return rows
 
 
-def add_markdown_table(doc, title, md_table, note=None, landscape=True):
+def add_markdown_table(doc, title, md_table, note=None, landscape=False):
     doc.add_page_break()
     if landscape:
         set_landscape(doc.add_section())
@@ -161,8 +163,6 @@ def add_markdown_table(doc, title, md_table, note=None, landscape=True):
     table = doc.add_table(rows=len(rows), cols=max(len(r) for r in rows))
     table.style = None
     apply_three_line_table_styling(table, rows)
-    for row in table.rows:
-        row.allow_break_across_pages = True
 
 
 def add_inline_markdown_table(doc, md_table, note=None):
@@ -174,13 +174,11 @@ def add_inline_markdown_table(doc, md_table, note=None):
     table = doc.add_table(rows=len(rows), cols=max(len(r) for r in rows))
     table.style = None
     apply_three_line_table_styling(table, rows)
-    for row in table.rows:
-        row.allow_break_across_pages = True
     add_paragraph(doc, "", after=2)
 
 
 def build_supp_table_7():
-    path = RESULTS / "supp_table7_missingness.md"
+    path = ROOT / "submission_packages" / "medrxiv" / "supp_table7_missingness.md"
     if not path.exists():
         raise FileNotFoundError(
             "Missingness table not found. Run generate_missingness_table.py first."
@@ -197,7 +195,7 @@ def add_inline_figure(doc, image_path, caption=None, width=6.25):
         add_paragraph(doc, caption, size=9.5, italic=True, before=3, after=8)
 
 
-def add_markdown_table_page(doc, title, md_table, note=None, landscape=True):
+def add_markdown_table_page(doc, title, md_table, note=None, landscape=False):
     doc.add_page_break()
     if landscape:
         set_landscape(doc.add_section())
@@ -213,8 +211,6 @@ def add_markdown_table_page(doc, title, md_table, note=None, landscape=True):
     table = doc.add_table(rows=len(rows), cols=max(len(r) for r in rows))
     table.style = None
     apply_three_line_table_styling(table, rows)
-    for row in table.rows:
-        row.allow_break_across_pages = True
 
 
 def add_figure(doc, title, image_path, caption, width=6.4):
@@ -229,10 +225,12 @@ def add_figure(doc, title, image_path, caption, width=6.4):
 
 
 def manuscript_lines_for_single_doc():
-    text = (RESULTS / "manuscript_tp.md").read_text(encoding="utf-8")
+    text = (ROOT / "submission_packages" / "translational_psychiatry" / "manuscript_tp.md").read_text(encoding="utf-8")
     text = text.replace("[repository URL]", GITHUB_URL)
     text = text.replace("\n[Insert Table 1 here]\n", "\n")
     text = text.replace("\n[Insert Table 2 here]\n", "\n")
+    text = text.replace("\n[Insert Table 3 here]\n", "\n")
+    text = text.replace("\n[Insert Table 4 here]\n", "\n")
     # Keep the supporting-information index out of the main text; the full supplement is appended.
     text = text.replace("\nSupporting information\n", "\n")
     text = re.sub(r"\n\*\*S1 Checklist\.[\s\S]*?(?=\nReferences\n)", "\n", text)
@@ -245,6 +243,20 @@ def add_markdown_body(doc, inline_display_items=False, results_file=None):
     for raw in manuscript_lines_for_single_doc():
         line = raw.strip()
         if not line:
+            continue
+        if line.startswith("#### Table 3."):
+            if inline_display_items:
+                add_paragraph(doc, line[5:], size=10.5, bold=True, before=5, after=4)
+                add_inline_markdown_table(doc, build_table_3(results_file))
+                inserted.add("table3")
+            continue
+        if line.startswith("#### Table 4."):
+            if inline_display_items:
+                add_paragraph(doc, line[5:], size=10.5, bold=True, before=5, after=4)
+                add_inline_markdown_table(doc, build_table_4(results_file))
+                inserted.add("table4")
+            continue
+        if line in ["[Insert Table 3 here]", "[Insert Table 4 here]"]:
             continue
         if not title_done:
             p = add_paragraph(
@@ -348,6 +360,18 @@ def main():
         build_table_2(results_file),
         note="Estimates are from fully adjusted weighted models unless otherwise indicated. The logistic model reports odds ratios for PHQ-9 ≥ 10.",
     )
+    add_markdown_table(
+        doc,
+        "Table 3. Subgroup-stratified analyses of the association between log(GBR) and depressive symptoms (WLS models).",
+        build_table_3(results_file),
+        landscape=False,
+    )
+    add_markdown_table(
+        doc,
+        "Table 4. Independent and additive associations of GBR and OBS (standardized per 1 SD).",
+        build_table_4(results_file),
+        landscape=False,
+    )
 
     add_figure(
         doc,
@@ -387,7 +411,7 @@ def main():
         ("Supplementary Table S7. Missingness of primary analysis variables before multiple imputation.", build_supp_table_7()),
     ]
     for title, table_md in supp_tables:
-        add_markdown_table(doc, title, table_md, landscape=True)
+        add_markdown_table(doc, title, table_md, landscape=False)
 
     supp_figs = [
         ("Supplementary Fig. S1. Participant selection flowchart.", "supp_figure1_flowchart.png", "Selection of eligible adults from NHANES 2007-2018.", 6.0),
@@ -398,6 +422,7 @@ def main():
     for title, filename, caption, width in supp_figs:
         add_figure(doc, title, RESULTS / "tp_figures" / filename, caption, width=width)
 
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUT)
     print(f"Saved {OUT}")
 
@@ -428,7 +453,7 @@ def main_print_reading():
         ("Supplementary Table S7. Missingness of primary analysis variables before multiple imputation.", build_supp_table_7()),
     ]
     for title, table_md in supp_tables:
-        add_markdown_table_page(doc, title, table_md, landscape=True)
+        add_markdown_table_page(doc, title, table_md, landscape=False)
 
     supp_figs = [
         ("Supplementary Fig. S1. Participant selection flowchart.", "supp_figure1_flowchart.png", "Selection of eligible adults from NHANES 2007-2018.", 6.0),
@@ -439,6 +464,7 @@ def main_print_reading():
     for title, filename, caption, width in supp_figs:
         add_figure(doc, title, RESULTS / "tp_figures" / filename, caption, width=width)
 
+    OUT_PRINT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUT_PRINT)
     print(f"Saved {OUT_PRINT}")
     print(f"Inline display items inserted: {sorted(inserted)}")

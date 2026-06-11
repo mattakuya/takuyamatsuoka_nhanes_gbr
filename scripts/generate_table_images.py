@@ -68,8 +68,13 @@ def render_table_image(df, title, output_path, figsize=(10, 6), col_widths=None)
     bg_section = '#f8f9fa'          # Subtle background for subgroup headers
     
     for (row_idx, col_idx), cell in tbl.get_celld().items():
-        # Remove all vertical lines to achieve clean "three-line table" style
-        cell.visible_edges = 'horizontal'
+        # Clean three-line table (booktabs) border configuration
+        if row_idx == 0:
+            cell.visible_edges = 'TB'
+        elif row_idx == n_rows:
+            cell.visible_edges = 'B'
+        else:
+            cell.visible_edges = ''
         
         # Check if this row is a section header (e.g. contains "**" or has empty values in other columns)
         is_section = False

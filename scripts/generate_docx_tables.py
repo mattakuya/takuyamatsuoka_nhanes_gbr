@@ -38,8 +38,8 @@ def main():
         results_file = get_latest_results_file()
         print(f"Reading results from: {results_file}")
         
-        output_dir = Path("results")
-        output_dir.mkdir(exist_ok=True)
+        output_dir = Path("submission_packages/translational_psychiatry")
+        output_dir.mkdir(parents=True, exist_ok=True)
         docx_path = output_dir / "tables_tp.docx"
         
         print("Creating beautiful standalone tables document...")
