@@ -19,12 +19,6 @@ wheels/
 # Data and Results (large files and outputs should not be in git)
 data/
 results/
-submission_packages/
-
-# Symlinks and directories without trailing slashes
-data
-results
-submission_packages
 
 # R history and cache
 .Rhistory
