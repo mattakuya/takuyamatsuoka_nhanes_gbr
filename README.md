@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This repository contains the official, fully reproducible research-grade code for investigating the association between the **gamma-glutamyl transferase-to-total bilirubin ratio (GBR)**—a routine biochemistry-derived proxy for systemic redox balance—and **depressive symptoms (PHQ-9)** in US adults.
+This repository contains the official, fully reproducible code for investigating the association between the **gamma-glutamyl transferase-to-total bilirubin ratio (GBR)**—a routine biochemistry-derived proxy for systemic redox balance—and **depressive symptoms (PHQ-9)** in US adults.
 
 The analysis is based on composite cross-sectional data from the **National Health and Nutrition Examination Survey (NHANES) 2007–2018** (*N* = 36,580). 
 
