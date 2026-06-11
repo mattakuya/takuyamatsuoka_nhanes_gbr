@@ -118,17 +118,6 @@ python scripts/generate_tables.py
 
 ---
 
-## 5. Licensing & Citation
+## 5. Licensing
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
-If you find this codebase or study useful in your research, please cite:
-```bibtex
-@article{matsuoka2026nhanesgbr,
-  title={Race- and ethnicity-specific association of the gamma-glutamyl transferase-to-bilirubin ratio with depressive symptoms in US adults: a NHANES 2007–2018 study},
-  author={Matsuoka, Takuya},
-  journal={Translational Psychiatry},
-  year={2026},
-  publisher={Nature Publishing Group}
-}
-```
