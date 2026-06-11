@@ -1,8 +1,8 @@
 import os
 import glob
 import re
-import shutil
 import math
+import pandas as pd
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.oxml import OxmlElement
@@ -14,8 +14,12 @@ def get_latest_results_file(results_dir="results"):
     # Exclude QUICK files
     files = [f for f in files if "QUICK" not in f]
     if not files:
-        raise FileNotFoundError("Results file matching 'nhanes_results_*.md' not found in results directory.")
-    # Return the latest file by modification time
+        # Check parent directory just in case
+        pattern_parent = os.path.join("..", results_dir, "nhanes_results_*.md")
+        files = glob.glob(pattern_parent)
+        files = [f for f in files if "QUICK" not in f]
+        if not files:
+            raise FileNotFoundError("Results file matching 'nhanes_results_*.md' not found in results directory.")
     return max(files, key=os.path.getmtime)
 
 def parse_markdown_table(file_path, header_title):
@@ -38,14 +42,17 @@ def parse_markdown_table(file_path, header_title):
     else:
         raise ValueError(f"Could not find table under heading: {header_title}")
 
-def build_table_2(file_path):
+def build_table_1(results_file):
+    return parse_markdown_table(results_file, "DESCRIPTIVE TABLE 1 BY LOG_RATIO QUARTILE")
+
+def build_table_2(results_file):
     """
     Constructs Table 2 (Primary and Sensitivity Analyses in the Full Sample)
     """
-    main_table = parse_markdown_table(file_path, "MAIN ANALYSIS: PHQ-9 CONTINUOUS")
-    logistic_table = parse_markdown_table(file_path, "SENSITIVITY: PHQ-9 ≥ 10 (Logistic, β on log-odds)")
-    sensitivity_table = parse_markdown_table(file_path, "SENSITIVITY ANALYSIS")
-    liver_safe_table = parse_markdown_table(file_path, "LIVER-SAFE (NO DILI) ANALYSIS")
+    main_table = parse_markdown_table(results_file, "MAIN ANALYSIS: PHQ-9 CONTINUOUS")
+    logistic_table = parse_markdown_table(results_file, "SENSITIVITY: PHQ-9 ≥ 10 (Logistic, β on log-odds)")
+    sensitivity_table = parse_markdown_table(results_file, "SENSITIVITY ANALYSIS")
+    liver_safe_table = parse_markdown_table(results_file, "LIVER-SAFE (NO DILI) ANALYSIS")
     
     def extract_rows(table_str):
         return table_str.strip().split('\n')[2:]
@@ -86,17 +93,17 @@ def build_table_2(file_path):
         
     return '\n'.join([header, separator] + rows)
 
-def build_table_3_subgroups(file_path):
+def build_table_3(results_file):
     """
-    Constructs Table 3 (Comprehensive Subgroup Analyses) -> Supplementary Table 1
+    Constructs Table 3 (Comprehensive Subgroup Analyses)
     """
-    bmi_table = parse_markdown_table(file_path, "BMI STRATIFIED ANALYSIS")
-    sex_table = parse_markdown_table(file_path, "SEX-STRATIFIED ANALYSIS")
-    age_table = parse_markdown_table(file_path, "AGE-STRATIFIED ANALYSIS")
-    race_table = parse_markdown_table(file_path, "RACE-STRATIFIED ANALYSIS")
-    alcohol_table = parse_markdown_table(file_path, "ALCOHOL-STRATIFIED ANALYSIS (NIAAA)")
-    cotinine_table = parse_markdown_table(file_path, "COTININE-STRATIFIED ANALYSIS (Pirkle)")
-    crp_table = parse_markdown_table(file_path, "CRP-STRATIFIED ANALYSIS (AHA, I/J only)")
+    bmi_table = parse_markdown_table(results_file, "BMI STRATIFIED ANALYSIS")
+    sex_table = parse_markdown_table(results_file, "SEX-STRATIFIED ANALYSIS")
+    age_table = parse_markdown_table(results_file, "AGE-STRATIFIED ANALYSIS")
+    race_table = parse_markdown_table(results_file, "RACE-STRATIFIED ANALYSIS")
+    alcohol_table = parse_markdown_table(results_file, "ALCOHOL-STRATIFIED ANALYSIS (NIAAA)")
+    cotinine_table = parse_markdown_table(results_file, "COTININE-STRATIFIED ANALYSIS (Pirkle)")
+    crp_table = parse_markdown_table(results_file, "CRP-STRATIFIED ANALYSIS (AHA, I/J only)")
     
     def extract_rows(table_str):
         return table_str.strip().split('\n')[2:]
@@ -125,12 +132,12 @@ def build_table_3_subgroups(file_path):
     
     return '\n'.join([header, separator] + rows)
 
-def build_table_3(file_path):
+def build_table_4(results_file):
     """
-    Constructs Table 4 (Specificity Analyses standardized per 1 SD) -> Supplementary Table 2
+    Constructs Table 4 (Specificity Analyses standardized per 1 SD)
     """
-    spec_table = parse_markdown_table(file_path, "SPECIFICITY ANALYSIS (SD-STANDARDIZED)")
-    joint_table = parse_markdown_table(file_path, "BILIRUBIN BEYOND GGT (JOINT MODEL, per 1 SD)")
+    spec_table = parse_markdown_table(results_file, "SPECIFICITY ANALYSIS (SD-STANDARDIZED)")
+    joint_table = parse_markdown_table(results_file, "BILIRUBIN BEYOND GGT (JOINT MODEL, per 1 SD)")
     
     def extract_rows(table_str):
         return table_str.strip().split('\n')[2:]
@@ -156,11 +163,11 @@ def build_table_3(file_path):
         
     return '\n'.join([header, separator] + rows)
 
-def build_table_4(file_path):
+def build_table_5(results_file):
     """
-    Constructs Table 5 (Independent and Additive Association GBR and OBS per 1 SD) -> Main Table 3
+    Constructs Table 5 (Independent and Additive Association of GBR and OBS per 1 SD)
     """
-    obs_table = parse_markdown_table(file_path, "JOINT MODEL: log_ratio + OBS (per 1 SD each, SD-standardized)")
+    obs_table = parse_markdown_table(results_file, "JOINT MODEL: log_ratio + OBS (per 1 SD each, SD-standardized)")
     
     def extract_rows(table_str):
         return table_str.strip().split('\n')[2:]
@@ -169,7 +176,6 @@ def build_table_4(file_path):
     separator = "| :--- | :--- | :---: | :---: | :---: | :---: | :---: |"
     
     rows = []
-    
     for row_str in extract_rows(obs_table):
         parts = [x.strip() for x in row_str.split('|')[1:-1]]
         if len(parts) == 13:
@@ -181,81 +187,150 @@ def build_table_4(file_path):
         
     return '\n'.join([header, separator] + rows)
 
-def build_table_hscrp_sensitivity(file_path):
-    table_str = parse_markdown_table(file_path, "I/J HS-CRP SENSITIVITY")
-    def extract_rows(t_str):
-        return t_str.strip().split('\n')[2:]
+def build_supp_table_1(results_file):
+    return parse_markdown_table(results_file, "VIF (Main Model Covariates)")
+
+def build_supp_table_2(results_file):
+    model_fit_table = parse_markdown_table(results_file, "MODEL FIT COMPARISON: RATIO vs GGT vs GGT+BIL")
     
-    header = "| Subgroup / Model | N | Beta [95% CI] | SE | P-value |"
-    separator = "| :--- | :---: | :---: | :---: | :---: |"
+    def extract_rows(table_str):
+        return table_str.strip().split('\n')[2:]
+        
+    header = "| Model | N | Parameters | Pseudo-AIC | Pseudo-BIC | Adjusted R² | Weighted RMSE |"
+    separator = "| :--- | :---: | :---: | :---: | :---: | :---: | :---: |"
     
     rows = []
-    for row_str in extract_rows(table_str):
+    for row_str in extract_rows(model_fit_table):
         parts = [x.strip() for x in row_str.split('|')[1:-1]]
-        subgroup, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
-        rows.append(f"| {subgroup} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} |")
+        model, n, m, aic_mean, aic_sd, bic_mean, bic_sd, r2_mean, r2_sd, rmse_mean, rmse_sd = parts
+        rows.append(f"| {model} | {n} | {m} | {float(aic_mean):.2f} | {float(bic_mean):.2f} | {float(r2_mean):.4f} | {float(rmse_mean):.4f} |")
         
     return '\n'.join([header, separator] + rows)
 
-def build_table_cca_vs_mice(file_path):
-    table_str = parse_markdown_table(file_path, "CCA vs MICE: GGT BIAS ASSESSMENT (SD-standardized)")
-    def extract_rows(t_str):
-        return t_str.strip().split('\n')[2:]
+def build_supp_table_3(results_file):
+    return parse_markdown_table(results_file, "CCA vs MICE: GGT BIAS ASSESSMENT (SD-standardized)")
+
+def build_supp_table_4(results_file):
+    spec_table = parse_markdown_table(results_file, "OXIDATIVE COMPARISON: GGT/Bil vs CDAI vs OBS (SD-STANDARDIZED)")
+    excl_ad_table = parse_markdown_table(results_file, "OXIDATIVE COMPARISON EXCL. AD USERS (SD-STANDARDIZED)")
     
-    header = "| Marker | Method | N | Beta [95% CI] | SE | P-value |"
+    def extract_rows(table_str):
+        return table_str.strip().split('\n')[2:]
+        
+    header = "| Analysis Cohort / Indicator | N | Beta [95% CI] | SE | P-value | Q-value |"
     separator = "| :--- | :---: | :---: | :---: | :---: | :---: |"
     
     rows = []
-    for row_str in extract_rows(table_str):
+    rows.append("| **Full Cohort (OBS-Restricted Sample)** | | | | | |")
+    for row_str in extract_rows(spec_table):
         parts = [x.strip() for x in row_str.split('|')[1:-1]]
-        marker, method, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
-        rows.append(f"| {marker} | {method} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} |")
+        subgroup, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
+        rows.append(f"| {subgroup} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} | {q} |")
+        
+    rows.append("| **Antidepressant Non-Users Cohort** | | | | | |")
+    for row_str in extract_rows(excl_ad_table):
+        parts = [x.strip() for x in row_str.split('|')[1:-1]]
+        subgroup, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
+        rows.append(f"| {subgroup} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} | {q} |")
         
     return '\n'.join([header, separator] + rows)
 
-def get_manuscript_text(table1, table2, table3, table4):
-    with open("results/manuscript_english.txt", "r", encoding="utf-8") as f:
-        text = f.read()
-    text = text.replace("{table1}", table1)
-    text = text.replace("{table2}", table2)
-    text = text.replace("{table3}", table3)
-    text = text.replace("{table4}", table4)
+def build_supp_table_5(results_file):
+    ad_table = parse_markdown_table(results_file, "AD-INTERACTION ANALYSIS [log_ratio]")
+    ad_normal_table = parse_markdown_table(results_file, "AD-INTERACTION ANALYSIS [log_ratio] (Normal BMI)")
+    
+    def extract_rows(table_str):
+        return table_str.strip().split('\n')[2:]
+        
+    header = "| Sample / Term | N | Beta [95% CI] | SE | P-value | Q-value |"
+    separator = "| :--- | :---: | :---: | :---: | :---: | :---: |"
+    
+    rows = []
+    rows.append("| **Full Cohort Interaction Model** | | | | | |")
+    for row_str in extract_rows(ad_table):
+        parts = [x.strip() for x in row_str.split('|')[1:-1]]
+        term, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
+        rows.append(f"| {term} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} | {q} |")
+        
+    rows.append("| **Normal BMI (18.5–24.9 kg/m²) Cohort** | | | | | |")
+    for row_str in extract_rows(ad_normal_table):
+        parts = [x.strip() for x in row_str.split('|')[1:-1]]
+        term, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
+        rows.append(f"| {term} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} | {q} |")
+        
+    return '\n'.join([header, separator] + rows)
 
-    return text
+def build_supp_table_6(race_results_file):
+    race_interaction = parse_markdown_table(race_results_file, "RACE/ETHNICITY INTERACTION ANALYSIS [log_ratio]")
+    global_test = parse_markdown_table(race_results_file, "GLOBAL RACE/ETHNICITY INTERACTION TEST [log_ratio]")
+    
+    def extract_rows(table_str):
+        return table_str.strip().split('\n')[2:]
+        
+    header = "| Term / Test | N | Beta / Chi-square [95% CI / df] | SE | P-value | Q-value |"
+    separator = "| :--- | :---: | :---: | :---: | :---: | :---: |"
+    
+    rows = []
+    rows.append("| **Interaction Model (NHWhite as Reference)** | | | | | |")
+    for row_str in extract_rows(race_interaction):
+        parts = [x.strip() for x in row_str.split('|')[1:-1]]
+        term, n, beta, se, ci_lo, ci_hi, p, q, q_fam = parts
+        rows.append(f"| {term} | {n} | {beta} [{ci_lo}, {ci_hi}] | {se} | {p} | {q} |")
+        
+    rows.append("| **Global Interaction Wald Test** | | | | | |")
+    for row_str in extract_rows(global_test):
+        parts = [x.strip() for x in row_str.split('|')[1:-1]]
+        test, n, chi2, df, p, terms, q, q_fam = parts
+        rows.append(f"| {test} | {n} | Chi² = {float(chi2):.4f} [df = {df}] | — | {p} | {q} |")
+        
+    return '\n'.join([header, separator] + rows)
 
+def parse_estimate(val_str):
+    # Parses beta, ci_lo, ci_hi from e.g. "0.3013 [0.1541, 0.4484]"
+    match = re.search(r"(-?\d+\.\d+)\s*\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]", val_str)
+    if match:
+        return float(match.group(1)), float(match.group(2)), float(match.group(3))
+    return None
 
-def get_supplementary_text(table1, table2, table3):
-    text = f'''# Association of the GGT-to-bilirubin ratio with depressive symptoms in US adults: an NHANES 2007–2018 study
-## Supplementary Material
+def format_p_value(p_str):
+    try:
+        p_val = float(p_str)
+        if p_val < 0.001:
+            return "< 0.001"
+        else:
+            return f"{p_val:.3f}"
+    except:
+        return p_str
 
-**Takuya Matsuoka**
+def markdown_to_dataframe(md_table_str):
+    lines = md_table_str.strip().split('\n')
+    # Filter out separator lines like | :--- | :---: |
+    lines = [l for l in lines if not re.match(r'^\s*\|?\s*:?-+:?\s*\|', l)]
+    
+    if not lines:
+        return pd.DataFrame()
+        
+    header_line = lines[0]
+    headers = [x.strip() for x in header_line.split('|')[1:-1]]
+    
+    rows = []
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        row = [x.strip() for x in line.split('|')[1:-1]]
+        if len(row) < len(headers):
+            row += [''] * (len(headers) - len(row))
+        elif len(row) > len(headers):
+            row = row[:len(headers)]
+        rows.append(row)
+        
+    return pd.DataFrame(rows, columns=headers)
 
----
-
-### Supplementary Tables
-
-#### S1 Table. Specificity analysis of GBR and other liver enzymes (standardized per 1 SD)
-{table1}
-
-#### S2 Table. High-sensitivity C-reactive protein (hs-CRP) sensitivity analysis in cycles I/J
-{table2}
-
-#### S3 Table. Bias assessment of complete case analysis (CCA) versus multiple imputation by chained equations (MICE) (standardized per 1 SD)
-{table3}
-
----
-'''
-    return text
-
-def apply_fonts_to_run(run, bold=False, size_pt=11):
-    """
-    Maps alphanumeric characters to Helvetica and East Asian characters to Meiryo.
-    """
+def apply_fonts_to_run(run, bold=False, size_pt=10):
     rPr = run._r.get_or_add_rPr()
     rFonts = OxmlElement('w:rFonts')
     rFonts.set(qn('w:ascii'), 'Helvetica')
     rFonts.set(qn('w:hAnsi'), 'Helvetica')
-    rFonts.set(qn('w:eastAsia'), 'Meiryo')
     rPr.append(rFonts)
     
     run.font.size = Pt(size_pt)
@@ -265,11 +340,6 @@ def apply_fonts_to_run(run, bold=False, size_pt=11):
 def apply_three_line_table_styling(table, rows_data):
     """
     Applies professional booktabs (three-line table) styling to a python-docx table.
-    - No vertical lines.
-    - Thick top rule (1.5 pt = 12 sz) and bottom rule (1.5 pt = 12 sz).
-    - Thin header rule below row 0 (0.75 pt = 6 sz).
-    - Cell padding (5 pt top/bottom, 7.5 pt left/right).
-    - Merged cells and light gray shading (#F2F2F2) for group header rows.
     """
     tblPr = table._tbl.tblPr
     
@@ -514,92 +584,3 @@ def convert_md_to_docx(md_path, docx_path):
         
     doc.save(docx_path)
     print(f"Successfully saved Word file to: {docx_path}")
-
-def main():
-    try:
-        results_file = get_latest_results_file()
-        print(f"Reading results from: {results_file}")
-        
-        output_dir = "results"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # 1. Parse table 1
-        table1 = parse_markdown_table(results_file, "DESCRIPTIVE TABLE 1 BY LOG_RATIO QUARTILE")
-        
-        # 2. Build table 2 (Primary & Sensitivity)
-        table2 = build_table_2(results_file)
-        
-        # 3. Build table 3 (Subgroups) -> Supplementary Table 1
-        table3_sub = build_table_3_subgroups(results_file)
-        
-        # 4. Build table 4 (Specificity) -> Supplementary Table 2
-        table4_spec = build_table_3(results_file)
-        
-        # 5. Build table 5 (Joint model GBR + OBS) -> Main Table 3
-        table5_joint = build_table_4(results_file)
-        
-        # 6. Build additional supplementary tables (hsCRP and CCA vs MICE)
-        table_hscrp = build_table_hscrp_sensitivity(results_file)
-        table_ccamice = build_table_cca_vs_mice(results_file)
-
-        # 6.5. Compile main manuscript.md
-        standard_dir = "submission_packages/standard"
-        os.makedirs(standard_dir, exist_ok=True)
-        manuscript_content = get_manuscript_text(table1, table2, table3_sub, table5_joint)
-        output_path = os.path.join(standard_dir, "manuscript.md")
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(manuscript_content)
-        print(f"Main manuscript successfully compiled and saved to: {os.path.abspath(output_path)}")
-        
-        # 7. Compile supplementary_material.md
-        supp_content = get_supplementary_text(table4_spec, table_hscrp, table_ccamice)
-        supp_path = os.path.join(standard_dir, "supplementary_material.md")
-        with open(supp_path, "w", encoding="utf-8") as f:
-            f.write(supp_content)
-        print(f"Supplementary materials successfully compiled and saved to: {os.path.abspath(supp_path)}")
-        
-        # 7.5. Convert markdown files to Word documents
-        convert_md_to_docx(os.path.join(standard_dir, "manuscript.md"), os.path.join(standard_dir, "manuscript.docx"))
-        convert_md_to_docx(os.path.join(standard_dir, "supplementary_material.md"), os.path.join(standard_dir, "supplementary_material.docx"))
-        
-        # 8. Copy and rename professional table/figure PNGs under submission_packages/translational_psychiatry/figures
-        assets_dir = "submission_packages/translational_psychiatry/figures"
-        os.makedirs(assets_dir, exist_ok=True)
-        
-        # Mapping for main figures and tables
-        file_mapping = {
-            # Tables
-            "table1_characteristics.png": "table1_characteristics.png",
-            "table2_association.png": "table2_primary_sensitivity.png",
-            "table3_subgroups.png": "table3_subgroups.png",
-            "table5_gbr_obs.png": "table4_gbr_obs.png",
-            "table4_specificity.png": "supp_table1_specificity.png",
-            "supp_table3_hscrp.png": "supp_table2_hscrp.png",
-            "supp_table4_ccamice.png": "supp_table3_ccamice.png",
-            # Figures
-            "figure1_forest_plot.png": "figure1_subgroups.png",
-            "figure2_specificity_plot.png": "figure2_specificity.png",
-            "rcs_log_ratio_phq9.png": "figure3_rcs_spline.png",
-            "figure4_interaction_plot.png": "figure4_interaction.png",
-            "figure5_forest_plot_latter.png": "figure5_subgroups_latter.png",
-            "figure6_flowchart.png": "figure6_flowchart.png"
-        }
-        
-        for orig, new_name in file_mapping.items():
-            orig_path = os.path.join(output_dir, orig)
-            new_path = os.path.join(assets_dir, new_name)
-            if os.path.exists(orig_path):
-                shutil.copy2(orig_path, new_path)
-                print(f"Asset copied and renamed: {orig} -> {assets_dir}/{new_name}")
-            else:
-                print(f"Warning: Original asset not found: {orig_path}")
-                
-        print("All publication-ready assets successfully compiled and organized!")
-        
-    except Exception as e:
-        print(f"Error compiling manuscript: {e}")
-        import traceback
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    main()

@@ -34,21 +34,16 @@ Oxidative stress is widely implicated in the pathophysiology of depression. GBR 
 ├── pyproject.toml              # Project dependency declarations (PEP 621 compliant)
 ├── uv.lock                     # Lockfile for precise dependency resolution
 ├── README.md                   # Repository documentation
-├── .gitignore                  # Git ignore definitions (ignores large raw files/caches)
+├── .gitignore                  # Git ignore definitions (ignores raw data/results)
 ├── .python-version             # Local python target (3.14)
 ├── scripts/                    # Python pipeline and visual execution scripts
 │   ├── download_nhanes.py      # Automated CDC NHANES raw dataset downloader
 │   ├── analysis_pipeline.py    # Main statistical pipeline (Preprocess -> MICE -> WLS -> Pooling)
-│   ├── generate_flowchart.py   # Renders participant inclusion flowchart (S1 Fig)
-│   ├── generate_forest_plot.py # Renders Table 2 / Table 3 forest plot (Figure 1)
-│   ├── generate_rcs_plot.py    # Renders Restricted Cubic Spline (RCS) curves (Figure 3)
-│   ├── generate_docx_tables.py # Compiles Markdown clinical tables into formatted Word tables
-│   ├── generate_manuscript.py  # Builds final Word manuscript with embedded tables/captions
-│   ├── generate_strobe_checklist.py # Generates cross-sectional STROBE reporting checklist
-│   ├── generate_missingness_table.py # Evaluates raw missingness before imputation (S7 Table)
-│   ├── generate_tp_manuscript.py  # Builds final Word manuscript for Translational Psychiatry
-│   └── generate_medrxiv_single_docx.py # Compiles unified Word manuscript for medRxiv
-└── results/                    # Output directory for plots, tables, and manuscripts (ignored in git)
+│   ├── run_survey_regression.R # Verification script utilizing R survey package
+│   ├── utils.py                # Shared statistical table parser and helper functions
+│   ├── generate_figures.py     # Renders all paper figures (Figures 1-7)
+│   └── generate_tables.py      # Compiles all paper clinical and supplementary tables (Tables 1-5, S7 Table)
+└── results/                    # Output directory for plots and tables (ignored in git)
 ```
 
 ---
@@ -85,7 +80,7 @@ pip install .
 
 ## 4. Pipeline Execution Workflow
 
-Follow these steps sequentially to reproduce the entire analysis, including all manuscripts, supplementary documents, tables, and figures.
+Follow these steps sequentially to reproduce the entire analysis, including all tables and figures.
 
 ### Step 1: Raw Data Acquisition
 Execute the batch downloader to retrieve raw `.XPT` SAS Transport files directly from the CDC website:
@@ -114,24 +109,11 @@ python scripts/analysis_pipeline.py
 Once the pipeline has completed and written the statistical findings to `results/`, generate all paper figures and tables:
 
 ```bash
-# Renders Figure 1 (Primary & Subgroup Forest Plot)
-python scripts/generate_forest_plot.py
+# Renders all publication-ready figures (saved under results/)
+python scripts/generate_figures.py
 
-# Renders Figure 3 (Restricted Cubic Spline dose-response curve)
-python scripts/generate_rcs_plot.py
-
-# Generates Figure 6 (Participant Selection Flowchart)
-python scripts/generate_flowchart.py
-
-# Generates S7 Table (Pre-imputation missingness table)
-python scripts/generate_missingness_table.py
-
-# Generates clinical Tables document (tables_tp.docx) styled with APA booktabs format
-python scripts/generate_docx_tables.py
-
-# Combines all figures, tables, and STROBE checklists into a submission-ready manuscript
-python scripts/generate_tp_manuscript.py
-python scripts/generate_strobe_checklist.py
+# Renders all formatted Word tables and PNG images (saved under results/)
+python scripts/generate_tables.py
 ```
 
 ---
